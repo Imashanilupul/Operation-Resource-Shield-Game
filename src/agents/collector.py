@@ -119,17 +119,19 @@ class CollectorAgent(BaseAgent):
         })
     
     def _process_messages(self) -> None:
-        """Process incoming messages from strategist"""
+        """Process incoming messages from explorer"""
         messages = self.get_messages()
         for message in messages:
             if message.message_type == "base_breached":
                 # Alert! Return to base immediately
                 self.returning_to_base = True
-            elif message.message_type == "collect_resource":
-                # Strategist assigned a resource to collect
+            elif message.message_type == "resource_found":
+                # Explorer found a resource - go collect it
                 content = message.content
                 if "position" in content:
                     self.current_target_resource = tuple(content["position"])
+                    # Set target to move to resource
+                    self.set_target(self.current_target_resource[0], self.current_target_resource[1], MOVEMENT_COLLECT)
     
     def _patrol_base(self) -> None:
         """Patrol near base camp while waiting for orders"""

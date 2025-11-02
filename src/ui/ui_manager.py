@@ -41,6 +41,7 @@ class UIManager:
         # Prepare text
         elapsed_time = game_state.get("elapsed_time", 0)
         resources_at_base = game_state.get("resources_at_base", 0)
+        resources_at_hideout = game_state.get("resources_at_hideout", 0)
         player_carrying = game_state.get("player_carrying", 0)
         game_status = game_state.get("status", "RUNNING")
         
@@ -52,12 +53,16 @@ class UIManager:
         surface.blit(time_text, (UI_PADDING, y_offset))
         
         # Resources at base
-        resources_text = self.font_medium.render(f"Base Resources: {resources_at_base}", True, COLOR_GREEN)
+        resources_text = self.font_medium.render(f"Base: {resources_at_base}", True, COLOR_GREEN)
         surface.blit(resources_text, (self.width // 3, y_offset))
         
+        # Resources at hideout
+        hideout_text = self.font_medium.render(f"Hideout: {resources_at_hideout}", True, COLOR_RED)
+        surface.blit(hideout_text, (self.width // 2 + 50, y_offset))
+        
         # Player resources
-        player_text = self.font_medium.render(f"Player Carrying: {player_carrying}/{PLAYER_CARRYING_CAPACITY}", True, COLOR_CYAN)
-        surface.blit(player_text, (2 * self.width // 3 - 50, y_offset))
+        player_text = self.font_medium.render(f"Carrying: {player_carrying}/{PLAYER_CARRYING_CAPACITY}", True, COLOR_CYAN)
+        surface.blit(player_text, (self.width - 250, y_offset))
         
         # Game status
         status_color = COLOR_GREEN if game_status == "RUNNING" else COLOR_RED
@@ -225,6 +230,11 @@ class UIManager:
         for agent in agents:
             # Skip strategist - don't show their vision range
             if agent.role == AGENT_ROLE_STRATEGIST:
+                continue
+            
+            # Skip inactive attackers
+            from src.agents.attacker import AttackerAgent
+            if isinstance(agent, AttackerAgent) and not agent.is_active:
                 continue
             
             # Get agent color based on role

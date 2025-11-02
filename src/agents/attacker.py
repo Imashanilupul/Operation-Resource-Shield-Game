@@ -25,11 +25,19 @@ class AttackerAgent(BaseAgent):
         self.last_known_thief_position = None
         self.pursuit_cooldown = 0
         self.is_pursuing = False
+        self.is_active = False  # Attacker not active until thief detected
     
     def think(self) -> None:
         """Attacker decision-making logic"""
         # Process messages
         self._process_messages()
+        
+        # If not active, stay at base camp
+        if not self.is_active:
+            # Stay at base camp position
+            from config.game_config import BASE_CAMP_X, BASE_CAMP_Y
+            self.set_target(BASE_CAMP_X, BASE_CAMP_Y, MOVEMENT_PATROL)
+            return
         
         # Update thief position from blackboard
         self.thief_position = self.blackboard.read_data("thief_position")
@@ -101,10 +109,12 @@ class AttackerAgent(BaseAgent):
                 if "position" in content:
                     self.thief_position = tuple(content["position"])
                     self.last_known_thief_position = self.thief_position
+                    self.is_active = True  # Activate attacker when thief spotted
             elif message.message_type == "intercept_command":
                 # Strategist gave interception command
                 content = message.content
                 if "target_position" in content:
+                    self.is_active = True  # Activate attacker
                     self.set_target(content["target_position"][0],
                                   content["target_position"][1], MOVEMENT_PURSUE)
     

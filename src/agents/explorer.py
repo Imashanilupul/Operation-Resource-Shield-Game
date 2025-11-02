@@ -101,14 +101,13 @@ class ExplorerAgent(BaseAgent):
                     self.set_target(content["zone"][0], content["zone"][1])
     
     def report_resource(self, x: float, y: float) -> None:
-        """Report a discovered resource"""
+        """Report a discovered resource directly to collector"""
         self.blackboard.add_resource_location((x, y), self.id)
         
-        # Report to strategist
-        self.send_message("agent_strategist", "resource_discovered", {
+        # Report directly to collector
+        self.send_message("agent_collector_0", "resource_found", {
             "position": (x, y),
-            "explorer_id": self.id,
-            "timestamp": self.blackboard.read_data("elapsed_time")
+            "explorer_id": self.id
         })
         
         # Broadcast for all to know

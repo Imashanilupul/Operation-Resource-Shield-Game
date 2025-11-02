@@ -69,8 +69,8 @@ class GameEngine:
         self.base_camp = BaseCamp(BASE_CAMP_X, BASE_CAMP_Y)
         self.hideout = ThiefHideout(HIDEOUT_X, HIDEOUT_Y)
         
-        # Create player
-        self.player = Player(50, 50)
+        # Create player (start at hideout)
+        self.player = Player(HIDEOUT_X, HIDEOUT_Y)
         
         # Create agents
         self._spawn_agents()
@@ -90,7 +90,7 @@ class GameEngine:
         self.agents.append(strategist)
         
         # Spawn explorers
-        for i in range(2):
+        for i in range(1):
             angle = i * (2 * 3.14159 / 2)
             import math
             x = BASE_CAMP_X + 150 * math.cos(angle)
@@ -99,7 +99,7 @@ class GameEngine:
             self.agents.append(explorer)
         
         # Spawn collectors
-        for i in range(2):
+        for i in range(1):
             angle = (i + 1) * (2 * 3.14159 / 2)
             import math
             x = BASE_CAMP_X + 150 * math.cos(angle)
@@ -107,8 +107,8 @@ class GameEngine:
             collector = CollectorAgent(f"agent_collector_{i}", x, y, self.base_camp, self.resource_manager)
             self.agents.append(collector)
         
-        # Spawn attacker
-        attacker = AttackerAgent("agent_attacker_0", BASE_CAMP_X - 100, BASE_CAMP_Y)
+        # Spawn attacker (starts at base, stays there until thief detected)
+        attacker = AttackerAgent("agent_attacker_0", BASE_CAMP_X, BASE_CAMP_Y)
         self.agents.append(attacker)
         
         # Register agents with strategist
@@ -336,6 +336,10 @@ class GameEngine:
         
         # Draw agents
         for agent in self.agents:
+            # Skip drawing inactive attackers
+            from src.agents.attacker import AttackerAgent
+            if isinstance(agent, AttackerAgent) and not agent.is_active:
+                continue
             agent.draw(self.screen)
         
         # Draw agent vision ranges
@@ -345,6 +349,7 @@ class GameEngine:
         game_state_dict = {
             "elapsed_time": self.elapsed_time,
             "resources_at_base": self.base_camp.get_resources(),
+            "resources_at_hideout": self.hideout.get_secured_resources(),
             "player_carrying": self.player.get_carrying_count(),
             "status": self.game_state,
             "fps": self.fps,
