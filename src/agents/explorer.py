@@ -31,12 +31,17 @@ class ExplorerAgent(BaseAgent):
         # Process messages
         self._process_messages()
         
+        # Decrement detection cooldown
+        if self.detection_cooldown > 0:
+            self.detection_cooldown -= 1
+        
         # Select zone to explore if needed
         if self.current_zone is None:
             self._select_zone_to_explore()
         
-        # Check for thief in vision range
-        self._check_for_thief()
+        # Check for thief in vision range (with cooldown)
+        if self.detection_cooldown <= 0:
+            self._check_for_thief()
         
         # Look for resources
         self._scan_for_resources()
@@ -98,16 +103,41 @@ class ExplorerAgent(BaseAgent):
     def report_resource(self, x: float, y: float) -> None:
         """Report a discovered resource"""
         self.blackboard.add_resource_location((x, y), self.id)
+        
+        # Report to strategist
+        self.send_message("agent_strategist", "resource_discovered", {
+            "position": (x, y),
+            "explorer_id": self.id,
+            "timestamp": self.blackboard.read_data("elapsed_time")
+        })
+        
+        # Broadcast for all to know
         self.broadcast_message("resource_discovered", {
             "position": (x, y),
             "explorer_id": self.id
         })
     
     def report_thief_sighting(self, x: float, y: float) -> None:
-        """Report sighting of thief"""
+        """Report sighting of thief to strategist"""
+        # Only report if cooldown expired
+        if self.detection_cooldown > 0:
+            return
+            
         self.thief_last_seen = (x, y)
         self.blackboard.update_thief_position((x, y), self.id)
+        
+        # Send message to strategist (not broadcast)
+        self.send_message("agent_strategist", "thief_sighted", {
+            "position": (x, y),
+            "observer": self.id,
+            "timestamp": self.blackboard.read_data("elapsed_time")
+        })
+        
+        # Also broadcast alert for awareness
         self.broadcast_message("thief_sighted", {
             "position": (x, y),
             "observer": self.id
         })
+        
+        # Set cooldown to prevent spam (60 frames = 1 second at 60 FPS)
+        self.detection_cooldown = 60

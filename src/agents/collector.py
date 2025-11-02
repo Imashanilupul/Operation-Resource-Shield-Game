@@ -30,7 +30,7 @@ class CollectorAgent(BaseAgent):
     
     def think(self) -> None:
         """Collector decision-making logic"""
-        # Process messages
+        # Process messages from strategist
         self._process_messages()
         
         # Check if at base
@@ -39,7 +39,10 @@ class CollectorAgent(BaseAgent):
                 self._deliver_resources()
                 self.returning_to_base = False
             else:
-                self._find_resource_target()
+                # Wait for strategist to assign a resource
+                if not self.current_target_resource:
+                    # Patrol near base while waiting
+                    self._patrol_base()
         
         # If returning to base
         if self.returning_to_base:
@@ -48,7 +51,8 @@ class CollectorAgent(BaseAgent):
         elif self.current_target_resource:
             self._move_to_resource()
         else:
-            self._find_resource_target()
+            # Idle near base, waiting for orders
+            self._patrol_base()
     
     def _find_resource_target(self) -> None:
         """Find nearest resource to collect"""
@@ -115,17 +119,32 @@ class CollectorAgent(BaseAgent):
         })
     
     def _process_messages(self) -> None:
-        """Process incoming messages"""
+        """Process incoming messages from strategist"""
         messages = self.get_messages()
         for message in messages:
             if message.message_type == "base_breached":
                 # Alert! Return to base immediately
                 self.returning_to_base = True
             elif message.message_type == "collect_resource":
-                # Strategist assigned a resource
+                # Strategist assigned a resource to collect
                 content = message.content
                 if "position" in content:
                     self.current_target_resource = tuple(content["position"])
+    
+    def _patrol_base(self) -> None:
+        """Patrol near base camp while waiting for orders"""
+        import random
+        import math
+        
+        # Patrol in a circle around base
+        base_pos = self.base_camp.get_position()
+        angle = random.uniform(0, 2 * math.pi)
+        patrol_radius = 80
+        
+        patrol_x = base_pos[0] + patrol_radius * math.cos(angle)
+        patrol_y = base_pos[1] + patrol_radius * math.sin(angle)
+        
+        self.set_target(patrol_x, patrol_y, MOVEMENT_PATROL)
     
     def check_for_theft(self, base_resources_before: int, base_resources_after: int) -> None:
         """

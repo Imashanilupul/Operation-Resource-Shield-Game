@@ -208,7 +208,14 @@ class Blackboard:
                 "observer": observer_id,
                 "timestamp": datetime.now()
             }
-            self.post_alert("thief_sighting", {"position": position, "observer": observer_id}, "warning")
+            # Post alert directly without calling post_alert to avoid lock recursion
+            alert = {
+                'type': 'thief_sighting',
+                'content': {"position": position, "observer": observer_id},
+                'severity': 'warning',
+                'timestamp': datetime.now(),
+            }
+            self.alerts.append(alert)
     
     def add_resource_location(self, position: tuple, discovery_id: str) -> None:
         """

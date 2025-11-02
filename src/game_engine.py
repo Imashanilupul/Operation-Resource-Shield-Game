@@ -51,6 +51,7 @@ class GameEngine:
         # UI
         self.ui_manager = UIManager()
         self.game_messages = []
+        self.communication_log = []  # Track all agent communications
         
         # Initialize game
         self._initialize_game()
@@ -158,6 +159,12 @@ class GameEngine:
             agent.update(self.map.get_obstacles())
             agent.think()
         
+        # Resource discovery: Explorers scan for resources
+        self._scan_resources_for_explorers()
+        
+        # Capture communications from blackboard
+        self._capture_communications()
+        
         # Check player interactions
         self._check_player_interactions()
         
@@ -166,6 +173,84 @@ class GameEngine:
         
         # Update blackboard
         self._update_blackboard()
+    
+    def _scan_resources_for_explorers(self) -> None:
+        """Explorers scan for resources within their vision range"""
+        from src.agents.explorer import ExplorerAgent
+        from config.game_config import AGENT_ROLE_EXPLORER
+        
+        # Find all explorer agents
+        explorers = [agent for agent in self.agents if isinstance(agent, ExplorerAgent) or agent.role == AGENT_ROLE_EXPLORER]
+        
+        # For each explorer, scan for nearby resources
+        for explorer in explorers:
+            # Get all resources currently on map
+            all_resources = self.resource_manager.resources
+            
+            # Check each resource
+            for resource in all_resources:
+                # Calculate distance from explorer to resource
+                dx = resource.x - explorer.x
+                dy = resource.y - explorer.y
+                distance = (dx**2 + dy**2)**0.5
+                
+                # If resource is within vision range and not yet reported
+                if distance <= explorer.vision_range:
+                    resource_id = f"{resource.x}_{resource.y}"
+                    
+                    # Check if we already reported this resource
+                    if not hasattr(explorer, 'reported_resources'):
+                        explorer.reported_resources = set()
+                    
+                    if resource_id not in explorer.reported_resources:
+                        # Report to strategist
+                        explorer.report_resource(resource.x, resource.y)
+                        explorer.reported_resources.add(resource_id)
+    
+    def _capture_communications(self) -> None:
+        """Capture and log agent communications"""
+        # Get all messages from blackboard
+        all_messages = self.blackboard.message_history
+        
+        # Check for new messages since last capture
+        for msg in all_messages[-5:]:  # Last 5 messages
+            if not msg.read:
+                continue
+                
+            # Format message for display
+            sender_name = msg.sender.replace("agent_", "").upper()
+            recipient_name = msg.recipient.replace("agent_", "").upper() if msg.recipient != "all" else "TEAM"
+            
+            if msg.message_type == "thief_sighted":
+                content = msg.content
+                log_msg = f"🎯 {sender_name} → {recipient_name}: THIEF SPOTTED at ({int(content.get('position', [0])[0])}, {int(content.get('position', [0])[1])})"
+                
+            elif msg.message_type == "resource_discovered":
+                content = msg.content
+                log_msg = f"📦 {sender_name} → {recipient_name}: RESOURCE FOUND at ({int(content.get('position', [0])[0])}, {int(content.get('position', [0])[1])})"
+                
+            elif msg.message_type == "collect_resource":
+                content = msg.content
+                log_msg = f"📍 {sender_name} → {recipient_name}: COLLECT from ({int(content.get('position', [0])[0])}, {int(content.get('position', [0])[1])})"
+                
+            elif msg.message_type == "intercept_command":
+                content = msg.content
+                log_msg = f"⚔️  {sender_name} → {recipient_name}: INTERCEPT THIEF at ({int(content.get('target_position', [0])[0])}, {int(content.get('target_position', [0])[1])})"
+                
+            elif msg.message_type == "resources_delivered":
+                content = msg.content
+                log_msg = f"✅ {sender_name}: DELIVERED {content.get('count', 0)} resources"
+                
+            else:
+                log_msg = f"📨 {sender_name} → {recipient_name}: {msg.message_type}"
+            
+            # Add to log if not already there
+            if log_msg not in self.communication_log:
+                self.communication_log.append(log_msg)
+                
+                # Keep only last 10 messages
+                if len(self.communication_log) > 10:
+                    self.communication_log.pop(0)
     
     def _check_player_interactions(self) -> None:
         """Check interactions between player and environment"""
@@ -195,7 +280,9 @@ class GameEngine:
         for agent in self.agents:
             if isinstance(agent, ExplorerAgent):
                 if agent.can_see(self.player.x, self.player.y) and self.player.is_visible():
-                    agent.report_thief_sighting(self.player.x, self.player.y)
+                    # Only report if not already reported recently
+                    if agent.detection_cooldown <= 0:
+                        agent.report_thief_sighting(self.player.x, self.player.y)
     
     def _check_win_conditions(self) -> None:
         """Check if any win condition is met"""
@@ -266,7 +353,7 @@ class GameEngine:
         self.ui_manager.draw_hud(self.screen, game_state_dict)
         self.ui_manager.draw_legend(self.screen)
         self.ui_manager.draw_objective_panel(self.screen, "thief")
-        self.ui_manager.draw_message_log(self.screen, self.game_messages)
+        self.ui_manager.draw_message_log(self.screen, self.communication_log)  # Show communications
         
         # Draw game over screen if needed
         if self.game_state == GAME_STATE_PLAYER_WIN:

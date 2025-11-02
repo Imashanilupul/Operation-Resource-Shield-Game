@@ -143,7 +143,7 @@ class ThiefHideout:
         self.x = x
         self.y = y
         self.size = HIDEOUT_SIZE
-        self.secure_resources = 0
+        self.secured_count = 0
     
     def get_position(self) -> tuple:
         """Get hideout position"""
@@ -171,11 +171,11 @@ class ThiefHideout:
         Args:
             count: Number of resources to secure
         """
-        self.secure_resources += count
+        self.secured_count += count
     
     def get_secured_resources(self) -> int:
         """Get number of secured resources"""
-        return self.secure_resources
+        return self.secured_count
     
     def draw(self, surface: pygame.Surface) -> None:
         """Draw the hideout"""
@@ -190,4 +190,4 @@ class ThiefHideout:
     
     def reset(self) -> None:
         """Reset hideout"""
-        self.secure_resources = 0
+        self.secured_count = 0

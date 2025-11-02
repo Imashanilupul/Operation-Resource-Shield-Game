@@ -37,6 +37,8 @@ class BaseAgent(ABC):
         self.vy = 0
         self.target_position: Optional[Tuple[float, float]] = None
         self.movement_type = MOVEMENT_PATROL
+        self.last_positions = []  # Track last positions to detect stuck state
+        self.stuck_counter = 0
         
         # State
         self.active = True
@@ -73,7 +75,7 @@ class BaseAgent(ABC):
     
     def move(self, obstacles=None) -> None:
         """
-        Move the agent towards target
+        Move the agent towards target with advanced obstacle avoidance
         
         Args:
             obstacles: List of obstacles to avoid
@@ -81,34 +83,113 @@ class BaseAgent(ABC):
         if not self.target_position or not self.active:
             return
         
-        # Move towards target
-        new_pos = move_towards(self.get_position(), self.target_position, self.speed)
+        current = self.get_position()
+        target = self.target_position
         
-        # Check if blocked by obstacle
-        if obstacles and any(obs.contains_circle(new_pos[0], new_pos[1], self.size) 
-                            for obs in obstacles):
-            # Attempt to move around obstacle
-            self._move_around_obstacle(new_pos, obstacles)
+        # Calculate desired movement
+        desired_pos = move_towards(current, target, self.speed)
+        
+        # Check if desired position is blocked
+        if self._is_position_blocked(desired_pos, obstacles):
+            # Use steering to navigate around obstacle
+            best_pos = self._find_best_path(current, target, obstacles)
+            self.set_position(best_pos[0], best_pos[1])
         else:
-            self.set_position(new_pos[0], new_pos[1])
+            # Path is clear
+            self.set_position(desired_pos[0], desired_pos[1])
         
         # Check if reached target
-        if distance(self.get_position(), self.target_position) < self.speed:
+        if distance(self.get_position(), target) < self.speed + 10:
             self.target_position = None
     
-    def _move_around_obstacle(self, blocked_pos: Tuple[float, float], obstacles) -> None:
-        """Try to move around an obstacle"""
-        # Simple avoidance: try adjacent positions
-        for dx in [-5, 5]:
-            for dy in [-5, 5]:
-                test_pos = (blocked_pos[0] + dx, blocked_pos[1] + dy)
-                if not any(obs.contains_circle(test_pos[0], test_pos[1], self.size) 
-                          for obs in obstacles):
-                    self.set_position(test_pos[0], test_pos[1])
-                    return
+    def _is_position_blocked(self, pos: Tuple[float, float], obstacles) -> bool:
+        """Check if a position is blocked by obstacles"""
+        if not obstacles:
+            return False
         
-        # If can't move around, stay in place
-        return
+        # Check with generous buffer to detect walls early
+        buffer = self.size + 15
+        for obs in obstacles:
+            if obs.contains_circle(pos[0], pos[1], buffer):
+                return True
+        
+        return False
+    
+    def _find_best_path(self, current: Tuple[float, float], target: Tuple[float, float], obstacles) -> Tuple[float, float]:
+        """
+        Find the best path around obstacles using steering
+        
+        Args:
+            current: Current position
+            target: Target position
+            obstacles: List of obstacles
+            
+        Returns:
+            Best position to move to
+        """
+        import math
+        
+        # Try multiple angles, prioritizing angles toward target
+        angle_to_target = math.atan2(target[1] - current[1], target[0] - current[0])
+        angles_to_try = []
+        
+        # Try angles around the target direction first
+        for offset in range(0, 180, 15):
+            angles_to_try.append(angle_to_target + math.radians(offset))
+            angles_to_try.append(angle_to_target - math.radians(offset))
+        
+        best_pos = current
+        best_dist_to_target = distance(current, target)
+        
+        # Try each angle
+        for angle in angles_to_try:
+            test_x = current[0] + math.cos(angle) * self.speed
+            test_y = current[1] + math.sin(angle) * self.speed
+            test_pos = (test_x, test_y)
+            
+            # Check if this position is valid (not blocked and in bounds)
+            if not self._is_position_blocked(test_pos, obstacles):
+                # Clamp to screen bounds
+                test_pos = clamp_position(test_pos, WINDOW_WIDTH, WINDOW_HEIGHT)
+                
+                # Check again after clamping
+                if not self._is_position_blocked(test_pos, obstacles):
+                    dist_to_target = distance(test_pos, target)
+                    
+                    # Prefer positions that get closer to target
+                    if dist_to_target < best_dist_to_target:
+                        best_pos = test_pos
+                        best_dist_to_target = dist_to_target
+        
+        # If we couldn't find a better path, try lateral movement (strafe)
+        if best_pos == current:
+            # Try moving perpendicular to obstacle
+            import math
+            perpendicular = angle_to_target + math.pi / 2
+            
+            for side_offset in [1, -1]:
+                for distance_mult in [0.5, 0.75, 1.0]:
+                    test_angle = perpendicular + side_offset * math.radians(45)
+                    test_x = current[0] + math.cos(test_angle) * self.speed * distance_mult
+                    test_y = current[1] + math.sin(test_angle) * self.speed * distance_mult
+                    test_pos = (test_x, test_y)
+                    
+                    if not self._is_position_blocked(test_pos, obstacles):
+                        test_pos = clamp_position(test_pos, WINDOW_WIDTH, WINDOW_HEIGHT)
+                        if not self._is_position_blocked(test_pos, obstacles):
+                            return test_pos
+        
+        # If still stuck, try stepping back and around
+        if best_pos == current:
+            # Move slightly backward then perpendicular
+            backward_x = current[0] - math.cos(angle_to_target) * self.speed * 0.3
+            backward_y = current[1] - math.sin(angle_to_target) * self.speed * 0.3
+            backward_pos = clamp_position((backward_x, backward_y), WINDOW_WIDTH, WINDOW_HEIGHT)
+            
+            if not self._is_position_blocked(backward_pos, obstacles):
+                return backward_pos
+        
+        return best_pos
     
     def patrol(self, map_width: float, map_height: float) -> None:
         """
@@ -194,6 +275,10 @@ class BaseAgent(ABC):
         if not self.active:
             return
         
+        # Check if stuck near wall and try to escape
+        if obstacles:
+            self._escape_if_stuck(obstacles)
+        
         # Move towards target or patrol
         if self.target_position:
             self.move(obstacles)
@@ -203,6 +288,41 @@ class BaseAgent(ABC):
         # Restore some energy
         if self.energy < self.max_energy:
             self.restore_energy(0.5)
+    
+    def _escape_if_stuck(self, obstacles) -> None:
+        """Detect if stuck near wall and try to escape"""
+        current = self.get_position()
+        
+        # Track movement history
+        self.last_positions.append(current)
+        if len(self.last_positions) > 20:
+            self.last_positions.pop(0)
+        
+        # Check if agent has moved significantly in last 20 frames
+        if len(self.last_positions) >= 20:
+            distance_moved = distance(self.last_positions[0], current)
+            if distance_moved < 5:  # Barely moved
+                self.stuck_counter += 1
+            else:
+                self.stuck_counter = 0
+        
+        # Check how close to walls/obstacles
+        min_dist_to_obstacle = float('inf')
+        for obs in obstacles:
+            # Distance from current position to obstacle
+            closest_x = max(obs.x, min(current[0], obs.x + obs.width))
+            closest_y = max(obs.y, min(current[1], obs.y + obs.height))
+            dist = distance(current, (closest_x, closest_y))
+            min_dist_to_obstacle = min(min_dist_to_obstacle, dist)
+        
+        # If very close to obstacle OR stuck for too long, force escape
+        if min_dist_to_obstacle < self.size + 25 or self.stuck_counter > 10:
+            import random
+            # Generate target away from walls (toward center of map)
+            target_x = random.uniform(100, WINDOW_WIDTH - 100)
+            target_y = random.uniform(100, WINDOW_HEIGHT - 100)
+            self.set_target(target_x, target_y, MOVEMENT_PATROL)
+            self.stuck_counter = 0
     
     @abstractmethod
     def think(self) -> None:

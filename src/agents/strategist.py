@@ -80,8 +80,9 @@ class StrategistAgent(BaseAgent):
     
     def _command_intercept(self, thief_position: tuple) -> None:
         """Command attacker to intercept thief"""
+        # Send direct command to attacker
         self.send_message(
-            f"agent_attacker_0",
+            "agent_attacker_0",
             "intercept_command",
             {"target_position": thief_position}
         )
@@ -123,9 +124,21 @@ class StrategistAgent(BaseAgent):
         messages = self.get_messages()
         
         for message in messages:
-            if message.message_type == "resource_discovered":
-                # Coordinator resource location
-                pass
+            if message.message_type == "thief_sighted":
+                # Explorer reported thief - update threat level
+                content = message.content
+                self.blackboard.post_data("thief_position", content.get("position"))
+                self.current_threat_level = "high"
+                # Command attacker immediately
+                self._command_intercept(content.get("position"))
+                
+            elif message.message_type == "resource_discovered":
+                # Explorer found a resource - command collectors
+                content = message.content
+                resource_pos = content.get("position")
+                if resource_pos:
+                    self._command_collect_resource(resource_pos)
+                    
             elif message.message_type == "resources_delivered":
                 # Update resource count
                 content = message.content
@@ -135,6 +148,16 @@ class StrategistAgent(BaseAgent):
             elif message.message_type == "base_breached":
                 # Alert! Thief in base
                 self.blackboard.post_data("base_status", "breached")
+    
+    def _command_collect_resource(self, resource_position: tuple) -> None:
+        """Command a collector to gather a specific resource"""
+        # Find idle collector
+        for i in range(2):
+            self.send_message(
+                f"agent_collector_{i}",
+                "collect_resource",
+                {"position": resource_position}
+            )
     
     def register_agent(self, agent_id: str, agent_role: str) -> None:
         """Register an agent under strategist's command"""

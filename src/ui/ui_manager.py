@@ -208,7 +208,7 @@ class UIManager:
     
     def draw_agent_vision_ranges(self, surface: pygame.Surface, agents: list) -> None:
         """
-        Draw agent vision ranges as circles
+        Draw agent vision ranges as circles (except strategist)
         
         Args:
             surface: Pygame surface to draw on
@@ -223,6 +223,10 @@ class UIManager:
         vision_surface.fill((0, 0, 0))
         
         for agent in agents:
+            # Skip strategist - don't show their vision range
+            if agent.role == AGENT_ROLE_STRATEGIST:
+                continue
+            
             # Get agent color based on role
             if agent.role == AGENT_ROLE_EXPLORER:
                 color = (0, 150, 255, 100)  # Cyan
@@ -230,8 +234,6 @@ class UIManager:
                 color = (255, 165, 0, 100)  # Orange
             elif agent.role == AGENT_ROLE_ATTACKER:
                 color = (255, 0, 0, 100)  # Red
-            elif agent.role == AGENT_ROLE_STRATEGIST:
-                color = (128, 0, 128, 100)  # Purple
             else:
                 color = (128, 128, 128, 100)  # Gray
             
@@ -247,7 +249,7 @@ class UIManager:
         vision_surface.set_alpha(50)
         surface.blit(vision_surface, (0, 0))
     
-    def draw_message_log(self, surface: pygame.Surface, messages: list, max_messages: int = 5) -> None:
+    def draw_message_log(self, surface: pygame.Surface, messages: list, max_messages: int = 8) -> None:
         """
         Draw recent messages log
         
@@ -260,21 +262,25 @@ class UIManager:
             return
         
         panel_x = 10
-        panel_y = self.height - 150
-        panel_width = 300
-        panel_height = 140
+        panel_y = self.height - 200
+        panel_width = 400
+        panel_height = 190
         
         # Draw panel background
-        pygame.draw.rect(surface, (20, 20, 20), (panel_x, panel_y, panel_width, panel_height))
-        pygame.draw.rect(surface, COLOR_GRAY, (panel_x, panel_y, panel_width, panel_height), 1)
+        pygame.draw.rect(surface, (10, 10, 20), (panel_x, panel_y, panel_width, panel_height))
+        pygame.draw.rect(surface, (100, 150, 255), (panel_x, panel_y, panel_width, panel_height), 2)
         
         # Title
-        title = self.font_small.render("RECENT ACTIONS", True, COLOR_WHITE)
+        title = self.font_small.render("📡 COMMUNICATIONS LOG", True, (100, 200, 255))
         surface.blit(title, (panel_x + 10, panel_y + 5))
         
         # Messages
         y = panel_y + 25
         for message in messages[-max_messages:]:
+            # Truncate if too long
+            if len(message) > 50:
+                message = message[:47] + "..."
+            
             text = self.font_small.render(message, True, COLOR_WHITE)
             surface.blit(text, (panel_x + 10, y))
             y += 20
