@@ -133,11 +133,12 @@ class StrategistAgent(BaseAgent):
                 self._command_intercept(content.get("position"))
                 
             elif message.message_type == "resource_discovered":
-                # Explorer found a resource - command collectors
+                # Explorer found a resource - forward to collectors
                 content = message.content
                 resource_pos = content.get("position")
                 if resource_pos:
-                    self._command_collect_resource(resource_pos)
+                    # Send to all collectors
+                    self._forward_resource_to_collectors(resource_pos)
                     
             elif message.message_type == "resources_delivered":
                 # Update resource count
@@ -156,6 +157,15 @@ class StrategistAgent(BaseAgent):
             self.send_message(
                 f"agent_collector_{i}",
                 "collect_resource",
+                {"position": resource_position}
+            )
+    
+    def _forward_resource_to_collectors(self, resource_position: tuple) -> None:
+        """Forward discovered resource location to all collectors"""
+        for i in range(2):
+            self.send_message(
+                f"agent_collector_{i}",
+                "resource_found",
                 {"position": resource_position}
             )
     

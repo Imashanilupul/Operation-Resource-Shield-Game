@@ -301,3 +301,60 @@ class UIManager:
             text = self.font_small.render(message, True, COLOR_WHITE)
             surface.blit(text, (panel_x + 10, y))
             y += 20
+    
+    def draw_difficulty_selection(self, surface: pygame.Surface, selected_difficulty: str) -> None:
+        """
+        Draw difficulty selection screen
+        
+        Args:
+            surface: Pygame surface to draw on
+            selected_difficulty: Currently selected difficulty ('easy', 'medium', 'hard')
+        """
+        # Background
+        surface.fill(COLOR_BLACK)
+        
+        # Title
+        title = self.font_large.render("SELECT DIFFICULTY", True, COLOR_CYAN)
+        title_rect = title.get_rect(center=(self.width // 2, 100))
+        surface.blit(title, title_rect)
+        
+        # Difficulty options with descriptions
+        difficulties = [
+            ("EASY", "1 Explorer, 1 Collector, 1 Attacker", "easy"),
+            ("MEDIUM", "2 Explorers, 4 Collectors, 2 Attackers", "medium"),
+            ("HARD", "4 Explorers, 5 Collectors, 4 Attackers", "hard"),
+        ]
+        
+        y_start = 250
+        spacing = 120
+        
+        for i, (name, description, difficulty_key) in enumerate(difficulties):
+            y = y_start + (i * spacing)
+            
+            # Highlight selected difficulty
+            if difficulty_key == selected_difficulty:
+                # Draw highlight background
+                pygame.draw.rect(surface, (50, 100, 200), (150, y - 40, 900, 100), 0)
+                pygame.draw.rect(surface, COLOR_CYAN, (150, y - 40, 900, 100), 3)
+                color = COLOR_CYAN
+            else:
+                color = COLOR_WHITE
+            
+            # Draw difficulty name
+            text_name = self.font_medium.render(name, True, color)
+            surface.blit(text_name, (200, y))
+            
+            # Draw description
+            text_desc = self.font_small.render(description, True, (150, 150, 150))
+            surface.blit(text_desc, (200, y + 40))
+        
+        # Instructions
+        instruction = self.font_small.render("USE ARROW KEYS TO SELECT - PRESS SPACE TO START", True, COLOR_YELLOW)
+        instruction_rect = instruction.get_rect(center=(self.width // 2, self.height - 80))
+        surface.blit(instruction, instruction_rect)
+        
+        # Hint
+        hint = self.font_small.render("Press ESC to return to game over screen", True, (100, 100, 100))
+        hint_rect = hint.get_rect(center=(self.width // 2, self.height - 40))
+        surface.blit(hint, hint_rect)
+

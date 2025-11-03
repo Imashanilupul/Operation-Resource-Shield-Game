@@ -38,6 +38,9 @@ AGENT_SIZE = 12
 AGENT_VISION_RANGE = 90
 AGENT_COMMUNICATION_RANGE = 300
 
+# ============ ROLE-SPECIFIC VISION RANGES ============
+COLLECTOR_VISION_RANGE = 30  # Collectors have very limited vision range
+
 # ============ RESOURCE SETTINGS ============
 RESOURCE_SIZE = 8
 RESOURCES_INITIAL_COUNT = 10
@@ -82,6 +85,8 @@ GAME_STATE_RUNNING = "running"
 GAME_STATE_PLAYER_WIN = "player_win"
 GAME_STATE_AGENTS_WIN = "agents_win"
 GAME_STATE_PAUSED = "paused"
+GAME_STATE_MENU = "menu"
+GAME_STATE_DIFFICULTY_SELECT = "difficulty_select"
 
 # ============ UI SETTINGS ============
 FONT_SIZE_SMALL = 16
@@ -92,19 +97,25 @@ UI_LINE_HEIGHT = 25
 
 # ============ DIFFICULTY SETTINGS ============
 DIFFICULTY_EASY = {
-    "agent_count": 2,
+    "explorers": 1,
+    "collectors": 1,
+    "attackers": 1,
     "agent_speed_multiplier": 0.8,
     "resource_spawn_multiplier": 1.5,
 }
 
-DIFFICULTY_NORMAL = {
-    "agent_count": 4,
+DIFFICULTY_MEDIUM = {
+    "explorers": 2,
+    "collectors": 4,
+    "attackers": 2,
     "agent_speed_multiplier": 1.0,
     "resource_spawn_multiplier": 1.0,
 }
 
 DIFFICULTY_HARD = {
-    "agent_count": 6,
+    "explorers": 4,
+    "collectors": 5,
+    "attackers": 4,
     "agent_speed_multiplier": 1.3,
     "resource_spawn_multiplier": 0.7,
 }

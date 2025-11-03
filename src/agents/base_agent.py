@@ -29,7 +29,13 @@ class BaseAgent(ABC):
         self.y = y
         self.speed = AGENT_SPEED
         self.size = AGENT_SIZE
-        self.vision_range = AGENT_VISION_RANGE
+        
+        # Set vision range based on role
+        if role == AGENT_ROLE_COLLECTOR:
+            self.vision_range = COLLECTOR_VISION_RANGE
+        else:
+            self.vision_range = AGENT_VISION_RANGE
+            
         self.communication_range = AGENT_COMMUNICATION_RANGE
         
         # Movement state

@@ -106,6 +106,12 @@ class BaseCamp:
     
     def draw(self, surface: pygame.Surface) -> None:
         """Draw the base camp"""
+        # Draw catching range (detection zone for attacker)
+        # This shows the range within which the attacker can catch the thief
+        from config.game_config import CATCHING_DISTANCE, AGENT_SIZE
+        catching_range = self.size + CATCHING_DISTANCE + AGENT_SIZE + 15  # Thief size ~15
+        pygame.draw.circle(surface, (255, 100, 100), (int(self.x), int(self.y)), int(catching_range), 1)
+        
         # Draw base circle
         pygame.draw.circle(surface, BASE_CAMP_COLOR, (int(self.x), int(self.y)), self.size)
         pygame.draw.circle(surface, COLOR_GREEN, (int(self.x), int(self.y)), self.size, 3)

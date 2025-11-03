@@ -34,11 +34,12 @@ class GameEngine:
         
         # Game state
         self.running = True
-        self.game_state = GAME_STATE_RUNNING
+        self.game_state = GAME_STATE_DIFFICULTY_SELECT
         self.elapsed_time = 0
         self.frame_count = 0
         self.fps = 0
         self.win_reason = ""  # Track reason for win
+        self.current_difficulty = "easy"  # Default difficulty
         
         # Game entities
         self.player: Player = None
@@ -54,11 +55,11 @@ class GameEngine:
         self.game_messages = []
         self.communication_log = []  # Track all agent communications
         
-        # Initialize game
-        self._initialize_game()
+        # Initialize game (but don't create entities yet - will do when difficulty is selected)
+        self._setup_game_world()
     
-    def _initialize_game(self) -> None:
-        """Initialize all game components"""
+    def _setup_game_world(self) -> None:
+        """Setup base game world components"""
         # Create map
         self.map = GameMap(WINDOW_WIDTH, WINDOW_HEIGHT)
         
@@ -72,8 +73,23 @@ class GameEngine:
         
         # Create player (start at hideout)
         self.player = Player(HIDEOUT_X, HIDEOUT_Y)
+    
+    def _initialize_game(self) -> None:
+        """Initialize all game components for a new game"""
+        # Reset blackboard for new game
+        self.blackboard.reset()
+        self.elapsed_time = 0
+        self.frame_count = 0
+        self.game_state = GAME_STATE_RUNNING
+        self.win_reason = ""
+        self.game_messages = []
         
-        # Create agents
+        # Reset player and world
+        self.player = Player(HIDEOUT_X, HIDEOUT_Y)
+        self.base_camp.reset()
+        self.hideout.reset()
+        
+        # Create agents based on difficulty
         self._spawn_agents()
         
         # Update blackboard with initial values
@@ -83,34 +99,47 @@ class GameEngine:
         })
     
     def _spawn_agents(self) -> None:
-        """Spawn AI agents"""
+        """Spawn AI agents based on current difficulty"""
         self.agents = []
+        import math
+        
+        # Get difficulty settings
+        if self.current_difficulty == "easy":
+            difficulty_config = DIFFICULTY_EASY
+        elif self.current_difficulty == "medium":
+            difficulty_config = DIFFICULTY_MEDIUM
+        else:  # hard
+            difficulty_config = DIFFICULTY_HARD
         
         # Spawn strategist (brain of the team)
         strategist = StrategistAgent("agent_strategist", BASE_CAMP_X, BASE_CAMP_Y)
         self.agents.append(strategist)
         
         # Spawn explorers
-        for i in range(1):
-            angle = i * (2 * 3.14159 / 2)
-            import math
+        num_explorers = difficulty_config.get("explorers", 1)
+        for i in range(num_explorers):
+            angle = i * (2 * 3.14159 / max(num_explorers, 1))
             x = BASE_CAMP_X + 150 * math.cos(angle)
             y = BASE_CAMP_Y + 150 * math.sin(angle)
             explorer = ExplorerAgent(f"agent_explorer_{i}", x, y)
             self.agents.append(explorer)
         
         # Spawn collectors
-        for i in range(1):
-            angle = (i + 1) * (2 * 3.14159 / 2)
-            import math
+        num_collectors = difficulty_config.get("collectors", 1)
+        for i in range(num_collectors):
+            angle = (i + 1) * (2 * 3.14159 / max(num_collectors, 1))
             x = BASE_CAMP_X + 150 * math.cos(angle)
             y = BASE_CAMP_Y + 150 * math.sin(angle)
             collector = CollectorAgent(f"agent_collector_{i}", x, y, self.base_camp, self.resource_manager)
             self.agents.append(collector)
         
-        # Spawn attacker (starts at base, stays there until thief detected)
-        attacker = AttackerAgent("agent_attacker_0", BASE_CAMP_X, BASE_CAMP_Y)
-        self.agents.append(attacker)
+        # Spawn attackers
+        num_attackers = difficulty_config.get("attackers", 1)
+        for i in range(num_attackers):
+            # Position attackers around base
+            angle = i * (2 * 3.14159 / max(num_attackers, 1))
+            attacker = AttackerAgent(f"agent_attacker_{i}", BASE_CAMP_X, BASE_CAMP_Y)
+            self.agents.append(attacker)
         
         # Register agents with strategist
         for agent in self.agents:
@@ -130,10 +159,31 @@ class GameEngine:
                 return False
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
+                    # In difficulty select, go back (quit)
+                    if self.game_state == GAME_STATE_DIFFICULTY_SELECT:
+                        return False
+                    # In game or menu, also quit
                     return False
-                elif event.key == pygame.K_p:
-                    # Toggle pause
+                elif event.key == pygame.K_p and self.game_state == GAME_STATE_RUNNING:
+                    # Toggle pause only during game
                     self.game_state = GAME_STATE_PAUSED if self.game_state == GAME_STATE_RUNNING else GAME_STATE_RUNNING
+                elif event.key == pygame.K_UP and self.game_state == GAME_STATE_DIFFICULTY_SELECT:
+                    # Navigate difficulty selection up
+                    difficulties = ["easy", "medium", "hard"]
+                    current_idx = difficulties.index(self.current_difficulty)
+                    self.current_difficulty = difficulties[(current_idx - 1) % 3]
+                elif event.key == pygame.K_DOWN and self.game_state == GAME_STATE_DIFFICULTY_SELECT:
+                    # Navigate difficulty selection down
+                    difficulties = ["easy", "medium", "hard"]
+                    current_idx = difficulties.index(self.current_difficulty)
+                    self.current_difficulty = difficulties[(current_idx + 1) % 3]
+                elif event.key == pygame.K_SPACE and self.game_state == GAME_STATE_DIFFICULTY_SELECT:
+                    # Start game with selected difficulty
+                    self._initialize_game()
+                elif event.key == pygame.K_SPACE and self.game_state in [GAME_STATE_PLAYER_WIN, GAME_STATE_AGENTS_WIN]:
+                    # Game over - go to difficulty select
+                    self.current_difficulty = "easy"  # Reset to easy
+                    self.game_state = GAME_STATE_DIFFICULTY_SELECT
         
         return True
     
@@ -285,6 +335,18 @@ class GameEngine:
                     # Only report if not already reported recently
                     if agent.detection_cooldown <= 0:
                         agent.report_thief_sighting(self.player.x, self.player.y)
+        
+        # Check if explorer discovered the hideout
+        for agent in self.agents:
+            if isinstance(agent, ExplorerAgent):
+                # Check if explorer is in vision range of hideout
+                hideout_pos = self.hideout.get_position()
+                if agent.can_see(hideout_pos[0], hideout_pos[1]):
+                    # Explorer found the hideout - agents win immediately
+                    self.game_state = GAME_STATE_AGENTS_WIN
+                    self.win_reason = "Explorer found the thief's hideout!"
+                    self.game_messages.append("Hideout discovered! Agents win!")
+                    return
     
     def _check_win_conditions(self) -> None:
         """Check if any win condition is met"""
@@ -320,6 +382,12 @@ class GameEngine:
     
     def draw(self) -> None:
         """Render game"""
+        # Handle difficulty selection screen
+        if self.game_state == GAME_STATE_DIFFICULTY_SELECT:
+            self.ui_manager.draw_difficulty_selection(self.screen, self.current_difficulty)
+            pygame.display.flip()
+            return
+        
         # Clear screen
         self.screen.fill(COLOR_BLACK)
         
