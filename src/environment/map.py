@@ -83,16 +83,30 @@ class GameMap:
             width = random.randint(*OBSTACLE_SIZE_RANGE)
             height = random.randint(*OBSTACLE_SIZE_RANGE)
             
-            # Ensure obstacles don't spawn at base camp
-            base_zone = (BASE_CAMP_X - 100, BASE_CAMP_Y - 100, 200, 200)
+            # Define safe zones where obstacles should NOT spawn
+            # Base camp zone - agents spawn 150px away from base, so buffer must be >= 150px
+            base_zone = (BASE_CAMP_X - 150, BASE_CAMP_Y - 150, 300, 300)
+            # Hideout zone - player starts here
+            hideout_zone = (HIDEOUT_X - 50, HIDEOUT_Y - 50, 100, 100)
+            
+            def is_in_safe_zone(x: float, y: float) -> bool:
+                """Check if position overlaps with any safe zone"""
+                # Check base camp zone
+                if (base_zone[0] < x < base_zone[0] + base_zone[2] and
+                    base_zone[1] < y < base_zone[1] + base_zone[3]):
+                    return True
+                # Check hideout zone
+                if (hideout_zone[0] < x < hideout_zone[0] + hideout_zone[2] and
+                    hideout_zone[1] < y < hideout_zone[1] + hideout_zone[3]):
+                    return True
+                return False
             
             while True:
                 x = random.randint(50, self.width - width - 50)
                 y = random.randint(50, self.height - height - 50)
                 
-                # Check if too close to base camp
-                if not (base_zone[0] < x < base_zone[0] + base_zone[2] and
-                       base_zone[1] < y < base_zone[1] + base_zone[3]):
+                # Check if position is outside all safe zones
+                if not is_in_safe_zone(x, y):
                     break
             
             self.obstacles.append(Obstacle(x, y, width, height))

@@ -107,8 +107,8 @@ class BaseAgent(ABC):
         if not obstacles:
             return False
         
-        # Check with generous buffer to detect walls early
-        buffer = self.size + 15
+        # Check with larger buffer to detect walls even earlier
+        buffer = self.size + 20  # Increased from 15 to 20
         for obs in obstacles:
             if obs.contains_circle(pos[0], pos[1], buffer):
                 return True
@@ -133,15 +133,15 @@ class BaseAgent(ABC):
         angle_to_target = math.atan2(target[1] - current[1], target[0] - current[0])
         angles_to_try = []
         
-        # Try angles around the target direction first (smaller step, more angles)
-        for offset in range(0, 180, 10):  # Every 10 degrees instead of 15
+        # Try angles around the target direction first (finer granularity)
+        for offset in range(0, 180, 8):  # Every 8 degrees for better coverage
             angles_to_try.append(angle_to_target + math.radians(offset))
             angles_to_try.append(angle_to_target - math.radians(offset))
         
         best_pos = current
         best_dist_to_target = distance(current, target)
         
-        # Try each angle
+        # Try each angle - prioritize moving forward
         for angle in angles_to_try:
             test_x = current[0] + math.cos(angle) * self.speed
             test_y = current[1] + math.sin(angle) * self.speed
@@ -157,37 +157,47 @@ class BaseAgent(ABC):
                     dist_to_target = distance(test_pos, target)
                     
                     # Prefer positions that get closer to target
-                    if dist_to_target < best_dist_to_target:
+                    if dist_to_target < best_dist_to_target or best_pos == current:
                         best_pos = test_pos
                         best_dist_to_target = dist_to_target
         
-        # If we couldn't find a better path, try lateral movement (strafe) at closer ranges
-        if best_pos == current:
-            # Try moving perpendicular to obstacle at various angles
-            import math
-            for strafe_angle in range(-90, 91, 20):  # More strafe angles
-                test_angle = angle_to_target + math.radians(strafe_angle)
-                test_x = current[0] + math.cos(test_angle) * self.speed * 0.8
-                test_y = current[1] + math.sin(test_angle) * self.speed * 0.8
-                test_pos = (test_x, test_y)
-                
+        # If we found a forward path, use it
+        if best_pos != current:
+            return best_pos
+        
+        # If stuck forward, try lateral/strafe movement with smaller angles
+        for strafe_angle in range(-120, 121, 10):  # Wider range, finer granularity
+            test_angle = angle_to_target + math.radians(strafe_angle)
+            test_x = current[0] + math.cos(test_angle) * self.speed * 0.7
+            test_y = current[1] + math.sin(test_angle) * self.speed * 0.7
+            test_pos = (test_x, test_y)
+            
+            if not self._is_position_blocked(test_pos, obstacles):
+                test_pos = clamp_position(test_pos, WINDOW_WIDTH, WINDOW_HEIGHT)
                 if not self._is_position_blocked(test_pos, obstacles):
-                    test_pos = clamp_position(test_pos, WINDOW_WIDTH, WINDOW_HEIGHT)
-                    if not self._is_position_blocked(test_pos, obstacles):
-                        return test_pos
+                    return test_pos
         
-        # If still stuck, try stepping back and around
-        if best_pos == current:
-            # Move slightly backward then try different angles
-            for back_mult in [0.5, 0.3, 0.1]:
-                backward_x = current[0] - math.cos(angle_to_target) * self.speed * back_mult
-                backward_y = current[1] - math.sin(angle_to_target) * self.speed * back_mult
-                backward_pos = clamp_position((backward_x, backward_y), WINDOW_WIDTH, WINDOW_HEIGHT)
-                
-                if not self._is_position_blocked(backward_pos, obstacles):
-                    return backward_pos
+        # If still stuck, try backward escape with multiple distances
+        for back_mult in [0.7, 0.5, 0.3, 0.1]:
+            backward_x = current[0] - math.cos(angle_to_target) * self.speed * back_mult
+            backward_y = current[1] - math.sin(angle_to_target) * self.speed * back_mult
+            backward_pos = clamp_position((backward_x, backward_y), WINDOW_WIDTH, WINDOW_HEIGHT)
+            
+            if not self._is_position_blocked(backward_pos, obstacles):
+                return backward_pos
         
-        return best_pos
+        # Last resort: try any direction perpendicular
+        for perpendicular_offset in [-90, 90, 180, 0]:
+            test_angle = angle_to_target + math.radians(perpendicular_offset)
+            test_x = current[0] + math.cos(test_angle) * self.speed * 0.5
+            test_y = current[1] + math.sin(test_angle) * self.speed * 0.5
+            test_pos = clamp_position((test_x, test_y), WINDOW_WIDTH, WINDOW_HEIGHT)
+            
+            if not self._is_position_blocked(test_pos, obstacles):
+                return test_pos
+        
+        # If truly stuck everywhere, stay in place (this shouldn't happen often)
+        return current
     
     def patrol(self, map_width: float, map_height: float) -> None:
         """
@@ -293,13 +303,13 @@ class BaseAgent(ABC):
         
         # Track movement history
         self.last_positions.append(current)
-        if len(self.last_positions) > 20:
+        if len(self.last_positions) > 15:  # Reduced from 20 for faster response
             self.last_positions.pop(0)
         
-        # Check if agent has moved significantly in last 20 frames
-        if len(self.last_positions) >= 20:
+        # Check if agent has moved significantly in last frames
+        if len(self.last_positions) >= 15:
             distance_moved = distance(self.last_positions[0], current)
-            if distance_moved < 8:  # Very little movement
+            if distance_moved < 6:  # Very little movement (reduced from 8)
                 self.stuck_counter += 1
             else:
                 self.stuck_counter = 0
@@ -314,12 +324,12 @@ class BaseAgent(ABC):
             min_dist_to_obstacle = min(min_dist_to_obstacle, dist)
         
         # If very close to obstacle OR stuck for too long, force escape
-        if min_dist_to_obstacle < self.size + 30 or self.stuck_counter > 5:
+        if min_dist_to_obstacle < self.size + 35 or self.stuck_counter > 3:  # Increased buffer and reduced stuck threshold
             import random
+            import math
             # Generate random escape direction, away from current position
             escape_angle = random.uniform(0, 2 * 3.14159)
-            import math
-            escape_distance = 150
+            escape_distance = 200  # Increased escape distance
             escape_x = current[0] + math.cos(escape_angle) * escape_distance
             escape_y = current[1] + math.sin(escape_angle) * escape_distance
             

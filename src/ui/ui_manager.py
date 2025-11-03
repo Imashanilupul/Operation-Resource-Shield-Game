@@ -93,15 +93,22 @@ class UIManager:
         if winner == "thief":
             title_text = self.font_large.render("THIEF WINS!", True, COLOR_CYAN)
             title_color = COLOR_CYAN
+            reason = "Successfully stole and secured all resources!"
         else:
             title_text = self.font_large.render("AGENTS WIN!", True, COLOR_GREEN)
             title_color = COLOR_GREEN
+            reason = stats.get('win_reason', 'Stopped the thief!')
         
-        title_rect = title_text.get_rect(center=(self.width // 2, self.height // 2 - 100))
+        title_rect = title_text.get_rect(center=(self.width // 2, self.height // 2 - 120))
         surface.blit(title_text, title_rect)
         
+        # Draw win reason
+        reason_text = self.font_medium.render(reason, True, title_color)
+        reason_rect = reason_text.get_rect(center=(self.width // 2, self.height // 2 - 40))
+        surface.blit(reason_text, reason_rect)
+        
         # Draw statistics
-        y = self.height // 2 - 20
+        y = self.height // 2 + 30
         stat_lines = [
             f"Time: {format_time(stats.get('elapsed_time', 0))}",
             f"Resources Stolen: {stats.get('resources_stolen', 0)}",

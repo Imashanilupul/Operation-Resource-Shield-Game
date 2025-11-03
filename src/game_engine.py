@@ -38,6 +38,7 @@ class GameEngine:
         self.elapsed_time = 0
         self.frame_count = 0
         self.fps = 0
+        self.win_reason = ""  # Track reason for win
         
         # Game entities
         self.player: Player = None
@@ -273,6 +274,7 @@ class GameEngine:
             if isinstance(agent, AttackerAgent):
                 if agent.check_thief_collision(self.player.x, self.player.y, self.player.size):
                     self.game_state = GAME_STATE_AGENTS_WIN
+                    self.win_reason = "Attacker caught the thief!"
                     self.game_messages.append("Thief caught! Agents win!")
                     return
         
@@ -289,11 +291,13 @@ class GameEngine:
         # Thief wins if all resources are stolen
         if self.base_camp.get_resources() <= 0:
             self.game_state = GAME_STATE_PLAYER_WIN
+            self.win_reason = "Stole all resources from the base!"
             self.game_messages.append("Thief stole all resources! Thief wins!")
         
         # Thief wins if secured enough resources
         if self.hideout.get_secured_resources() >= WINNING_RESOURCES_FOR_THIEF:
             self.game_state = GAME_STATE_PLAYER_WIN
+            self.win_reason = "Successfully secured all resources in hideout!"
             self.game_messages.append("Thief secured all resources! Thief wins!")
     
     def _update_blackboard(self) -> None:
@@ -367,6 +371,7 @@ class GameEngine:
                 "resources_stolen": self.player.resources_secured,
                 "resources_secured": self.hideout.get_secured_resources(),
                 "agent_actions": len(self.agents),
+                "win_reason": self.win_reason,
             }
             self.ui_manager.draw_game_over_screen(self.screen, "thief", stats)
         elif self.game_state == GAME_STATE_AGENTS_WIN:
@@ -375,6 +380,7 @@ class GameEngine:
                 "resources_stolen": self.player.resources_secured,
                 "resources_secured": self.hideout.get_secured_resources(),
                 "agent_actions": len(self.agents),
+                "win_reason": self.win_reason,
             }
             self.ui_manager.draw_game_over_screen(self.screen, "agents", stats)
         
