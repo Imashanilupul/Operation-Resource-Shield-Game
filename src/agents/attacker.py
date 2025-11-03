@@ -54,6 +54,34 @@ class AttackerAgent(BaseAgent):
             # Patrol near base camp
             self._patrol_base_defense()
     
+    def check_and_pursue_thief(self, thief_x: float, thief_y: float, thief_visible: bool) -> bool:
+        """
+        Check if attacker can see the thief and pursue if so
+        
+        Args:
+            thief_x: Thief X coordinate
+            thief_y: Thief Y coordinate
+            thief_visible: Whether thief is visible
+            
+        Returns:
+            True if thief is spotted by attacker
+        """
+        # Only check if thief is visible and in attacker's vision range
+        if thief_visible and self.can_see(thief_x, thief_y):
+            # Attacker spotted the thief!
+            self.thief_position = (thief_x, thief_y)
+            self.last_known_thief_position = (thief_x, thief_y)
+            self.is_active = True  # Activate attacker
+            
+            # Report sighting to team
+            self.broadcast_message("attacker_thief_spotted", {
+                "attacker_id": self.id,
+                "position": (thief_x, thief_y)
+            })
+            
+            return True
+        return False
+    
     def _pursue_thief(self) -> None:
         """Pursue the thief"""
         if not self.thief_position:

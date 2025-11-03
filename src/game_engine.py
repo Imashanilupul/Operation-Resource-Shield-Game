@@ -347,6 +347,14 @@ class GameEngine:
                     self.win_reason = "Explorer found the thief's hideout!"
                     self.game_messages.append("Hideout discovered! Agents win!")
                     return
+        
+        # Check if attackers can see the player and pursue
+        for agent in self.agents:
+            if isinstance(agent, AttackerAgent):
+                # Check if attacker can see the thief directly
+                if agent.check_and_pursue_thief(self.player.x, self.player.y, self.player.is_visible()):
+                    # Attacker spotted the thief and will pursue
+                    self.game_messages.append("Attacker spotted the thief!")
     
     def _check_win_conditions(self) -> None:
         """Check if any win condition is met"""
