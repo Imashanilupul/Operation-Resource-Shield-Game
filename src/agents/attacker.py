@@ -32,27 +32,25 @@ class AttackerAgent(BaseAgent):
         # Process messages
         self._process_messages()
         
-        # If not active, stay at base camp
-        if not self.is_active:
-            # Stay at base camp position
-            from config.game_config import BASE_CAMP_X, BASE_CAMP_Y
-            self.set_target(BASE_CAMP_X, BASE_CAMP_Y, MOVEMENT_PATROL)
-            return
+        # Check if can see thief directly (within vision range)
+        # This is checked independently from blackboard messages
+        # The game engine will call check_and_pursue_thief() to update position
         
-        # Update thief position from blackboard
-        self.thief_position = self.blackboard.read_data("thief_position")
-        
-        # If thief is detected, pursue
-        if self.thief_position:
+        # If active and have thief position, pursue aggressively
+        if self.is_active and self.thief_position:
             self._pursue_thief()
             self.is_pursuing = True
-        elif self.last_known_thief_position:
+        elif self.is_active and self.last_known_thief_position:
             # Move to last known position
             self._move_to_last_known_position()
             self.is_pursuing = False
-        else:
-            # Patrol near base camp
+        elif self.is_active:
+            # Active but no position known - patrol
             self._patrol_base_defense()
+        else:
+            # Not active - stay near base camp
+            from config.game_config import BASE_CAMP_X, BASE_CAMP_Y
+            self.set_target(BASE_CAMP_X, BASE_CAMP_Y, MOVEMENT_PATROL)
     
     def check_and_pursue_thief(self, thief_x: float, thief_y: float, thief_visible: bool) -> bool:
         """
@@ -72,6 +70,9 @@ class AttackerAgent(BaseAgent):
             self.thief_position = (thief_x, thief_y)
             self.last_known_thief_position = (thief_x, thief_y)
             self.is_active = True  # Activate attacker
+            
+            # Set target to move toward thief immediately
+            self.set_target(thief_x, thief_y, MOVEMENT_PURSUE)
             
             # Report sighting to team
             self.broadcast_message("attacker_thief_spotted", {
