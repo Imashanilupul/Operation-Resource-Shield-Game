@@ -478,3 +478,10 @@ For issues, questions, or suggestions, please open an issue on GitHub.
 ---
 
 **Enjoy the game and may the best team win! 🎮**
+
+---
+
+## 📄 License
+
+This project is licensed under the **Harvard Open Source License** - see the [LICENSE](LICENSE) file for details.
+
