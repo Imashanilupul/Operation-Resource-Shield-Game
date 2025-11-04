@@ -30,22 +30,23 @@ class CollectorAgent(BaseAgent):
     
     def think(self) -> None:
         """Collector decision-making logic"""
-        # Process messages from strategist
+        # Process messages from explorer/strategist
         self._process_messages()
         
         # Check if at base
         if self.base_camp.is_agent_inside(self.x, self.y, self.size):
             if len(self.carrying) > 0:
+                # Deliver resources immediately
                 self._deliver_resources()
                 self.returning_to_base = False
+                self.current_target_resource = None
             else:
-                # Wait for strategist to assign a resource
+                # No resources to deliver, look for targets
                 if not self.current_target_resource:
-                    # Patrol near base while waiting
+                    # Patrol near base while waiting for orders
                     self._patrol_base()
-        
-        # If returning to base
-        if self.returning_to_base:
+        # If returning to base, prioritize that
+        elif self.returning_to_base:
             self._return_to_base()
         # If has target resource, move to it
         elif self.current_target_resource:
@@ -70,23 +71,30 @@ class CollectorAgent(BaseAgent):
         if not self.current_target_resource:
             return
         
-        # Check if reached resource
-        if distance(self.get_position(), self.current_target_resource) < 20:
+        # Check if reached resource (increased tolerance to 30px for easier collection)
+        dist_to_resource = distance(self.get_position(), self.current_target_resource)
+        if dist_to_resource < 30:
             self._collect_resource()
-            self.current_target_resource = None
-            
-            # If at carrying capacity, return to base
-            if len(self.carrying) >= self.carrying_capacity:
-                self.returning_to_base = True
+            # After collecting, clear target
+            if not self.current_target_resource or self.current_target_resource is None:
+                # Resource was collected, check if at capacity
+                if len(self.carrying) >= self.carrying_capacity:
+                    self.returning_to_base = True
+        else:
+            # Still moving to resource, update target to ensure we keep moving
+            self.set_target(self.current_target_resource[0], self.current_target_resource[1], MOVEMENT_COLLECT)
     
     def _collect_resource(self) -> None:
         """Collect a resource"""
-        if len(self.carrying) < self.carrying_capacity and self.resource_manager:
-            # Get resource at this position
+        if not self.current_target_resource or len(self.carrying) >= self.carrying_capacity:
+            return
+        
+        if self.resource_manager:
+            # Get resource at this position with larger search radius
             resource = self.resource_manager.get_resource_at(
                 self.current_target_resource[0],
                 self.current_target_resource[1],
-                radius=30
+                radius=50  # Increased search radius
             )
             
             if resource:
@@ -98,8 +106,14 @@ class CollectorAgent(BaseAgent):
                     })
                     self.broadcast_message("resource_collected", {
                         "collector_id": self.id,
-                        "total_carrying": len(self.carrying)
+                        "total_carrying": len(self.carrying),
+                        "position": self.current_target_resource
                     })
+                    # Clear target after successful collection
+                    self.current_target_resource = None
+            else:
+                # Resource not found at target location - clear target and look elsewhere
+                self.current_target_resource = None
     
     def _return_to_base(self) -> None:
         """Return to base camp"""

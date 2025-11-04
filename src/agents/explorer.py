@@ -117,7 +117,7 @@ class ExplorerAgent(BaseAgent):
         })
     
     def report_thief_sighting(self, x: float, y: float) -> None:
-        """Report sighting of thief to strategist"""
+        """Report sighting of thief to strategist and attackers"""
         # Only report if cooldown expired
         if self.detection_cooldown > 0:
             return
@@ -125,14 +125,40 @@ class ExplorerAgent(BaseAgent):
         self.thief_last_seen = (x, y)
         self.blackboard.update_thief_position((x, y), self.id)
         
-        # Send message to strategist (not broadcast)
+        # Send message to strategist
         self.send_message("agent_strategist", "thief_sighted", {
             "position": (x, y),
             "observer": self.id,
             "timestamp": self.blackboard.read_data("elapsed_time")
         })
         
-        # Also broadcast alert for awareness
+        # Send direct alert to all attackers
+        # Attackers need immediate notification with exact coordinates
+        self.send_message("agent_attacker_0", "thief_sighted", {
+            "position": (x, y),
+            "observer": self.id,
+            "timestamp": self.blackboard.read_data("elapsed_time")
+        })
+        
+        # For hard difficulty with multiple attackers, send to all
+        from config.game_config import DIFFICULTY_HARD
+        self.send_message("agent_attacker_1", "thief_sighted", {
+            "position": (x, y),
+            "observer": self.id,
+            "timestamp": self.blackboard.read_data("elapsed_time")
+        })
+        self.send_message("agent_attacker_2", "thief_sighted", {
+            "position": (x, y),
+            "observer": self.id,
+            "timestamp": self.blackboard.read_data("elapsed_time")
+        })
+        self.send_message("agent_attacker_3", "thief_sighted", {
+            "position": (x, y),
+            "observer": self.id,
+            "timestamp": self.blackboard.read_data("elapsed_time")
+        })
+        
+        # Also broadcast alert for team awareness
         self.broadcast_message("thief_sighted", {
             "position": (x, y),
             "observer": self.id
