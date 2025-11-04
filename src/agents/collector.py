@@ -52,8 +52,14 @@ class CollectorAgent(BaseAgent):
         elif self.current_target_resource:
             self._move_to_resource()
         else:
-            # Idle near base, waiting for orders
-            self._patrol_base()
+            # Check if can see any resources nearby
+            visible_resource = self._check_visible_resources()
+            if visible_resource:
+                self.current_target_resource = visible_resource
+                self.set_target(visible_resource[0], visible_resource[1], MOVEMENT_COLLECT)
+            else:
+                # Idle near base, waiting for orders
+                self._patrol_base()
     
     def _find_resource_target(self) -> None:
         """Find nearest resource to collect"""
@@ -65,6 +71,39 @@ class CollectorAgent(BaseAgent):
                          key=lambda r: distance(self.get_position(), r))
             self.current_target_resource = nearest
             self.set_target(nearest[0], nearest[1], MOVEMENT_COLLECT)
+    
+    def _check_visible_resources(self) -> tuple:
+        """
+        Check for resources within vision range and return nearest one
+        
+        Returns:
+            Tuple of (x, y) for nearest visible resource, or None
+        """
+        if not self.resource_manager:
+            return None
+        
+        # Get all active resources
+        resources = self.resource_manager.resources
+        
+        if not resources:
+            return None
+        
+        # Find resources within vision range
+        visible_resources = []
+        for resource in resources:
+            res_pos = resource.get_position()
+            dist = distance(self.get_position(), res_pos)
+            
+            # Check if within collector's vision range
+            if dist <= self.vision_range and len(self.carrying) < self.carrying_capacity:
+                visible_resources.append((res_pos, dist))
+        
+        # Return nearest visible resource
+        if visible_resources:
+            nearest = min(visible_resources, key=lambda x: x[1])
+            return nearest[0]
+        
+        return None
     
     def _move_to_resource(self) -> None:
         """Move to target resource"""
